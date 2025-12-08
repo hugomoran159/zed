@@ -55,7 +55,7 @@ use gpui::{
     transparent_black,
 };
 use itertools::Itertools;
-use language::{IndentGuideSettings, language_settings::ShowWhitespaceSetting};
+use language::{Capability, IndentGuideSettings, language_settings::ShowWhitespaceSetting};
 use markdown::Markdown;
 use multi_buffer::{
     Anchor, ExcerptId, ExcerptInfo, ExpandExcerptDirection, ExpandInfo, MultiBufferPoint,
@@ -4116,6 +4116,14 @@ impl EditorElement {
                                                     );
                                                 }
                                             })),
+                                    )
+                                    .when(
+                                        for_excerpt.buffer.capability == Capability::ReadOnly,
+                                        |el| {
+                                            el.child(
+                                                Icon::new(IconName::FileLock).color(Color::Muted),
+                                            )
+                                        },
                                     )
                                     .when_some(parent_path, |then, path| {
                                         then.child(Label::new(path).truncate().color(
