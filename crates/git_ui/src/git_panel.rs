@@ -2546,12 +2546,8 @@ impl GitPanel {
                 cx,
             );
 
-            // TODO!: Why can't I use `cx.background_spawn` here?
             return cx
-                .background_executor()
-                .spawn(async move {
-                    result.await.ok();
-                })
+                .background_spawn(async move { result.await.ok() })
                 .detach();
         }
 
