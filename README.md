@@ -1,39 +1,119 @@
-# Zed
+# GPUI Web Platform (WebAssembly/WebGPU)
 
-[![Zed](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/zed-industries/zed/main/assets/badge/v0.json)](https://zed.dev)
-[![CI](https://github.com/zed-industries/zed/actions/workflows/run_tests.yml/badge.svg)](https://github.com/zed-industries/zed/actions/workflows/run_tests.yml)
+> **Note**: This implementation was developed with assistance from [Claude Code](https://claude.ai/code).
 
-Welcome to Zed, a high-performance, multiplayer code editor from the creators of [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
+This fork adds web platform support to [GPUI](https://www.gpui.rs/), the GPU-accelerated UI framework from [Zed](https://zed.dev).
 
----
+**[Live Demo →](https://hugomoran159.github.io/gpui-web-demo/examples.html)**
 
-### Installation
+## Overview
 
-On macOS, Linux, and Windows you can [download Zed directly](https://zed.dev/download) or [install Zed via your local package manager](https://zed.dev/docs/linux#installing-via-a-package-manager).
+GPUI now runs in the browser via WebAssembly with support for both **WebGPU** and **WebGL2** backends (via wgpu's automatic fallback). All 31 GPUI examples work in modern browsers.
 
-Other platforms are not yet available:
+### What Works
 
-- Web ([tracking issue](https://github.com/zed-industries/zed/issues/5396))
+- Text rendering (via cosmic-text)
+- Images, GIFs, and SVGs
+- Animations and transitions
+- Mouse input (click, hover, drag & drop)
+- Keyboard input and text editing
+- Scrolling and uniform lists
+- Gradients, shadows, patterns, and paths
+- Flexbox and grid layouts
 
-### Developing Zed
+### What's Not Implemented
 
-- [Building Zed for macOS](./docs/src/development/macos.md)
-- [Building Zed for Linux](./docs/src/development/linux.md)
-- [Building Zed for Windows](./docs/src/development/windows.md)
-- [Running Collaboration Locally](./docs/src/development/local-collaboration.md)
+- Clipboard (read/write)
+- File dialogs
+- Native menus
+- Multi-window support
+- Drag & drop to/from OS
 
-### Contributing
+## Technical Approach
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for ways you can contribute to Zed.
+The implementation adds a new platform module (`crates/gpui/src/platform/web/`) alongside the existing macOS, Linux, and Windows implementations. Key components:
 
-Also... we're hiring! Check out our [jobs](https://zed.dev/jobs) page for open roles.
+| Component | Implementation |
+|-----------|----------------|
+| Rendering | WebGPU or WebGL2 via `wgpu` (auto-detected) |
+| Text | `cosmic-text` (same as Linux) |
+| Event loop | `requestAnimationFrame` via `wasm-bindgen` |
+| Async runtime | `futures` crate (no `smol` in WASM) |
+| Time | `web_time::Instant` (no `std::time::Instant`) |
 
-### Licensing
+### Core Changes
 
-License information for third party dependencies must be correctly provided for CI to pass.
+Changes to existing GPUI code are minimal and `cfg`-gated:
 
-We use [`cargo-about`](https://github.com/EmbarkStudios/cargo-about) to automatically comply with open source licenses. If CI is failing, check the following:
+1. **Async GPU Init**: WebGPU requires async `request_adapter().await` - added `is_renderer_ready()` check to defer first draw
+2. **No Blocking**: WASM can't block - `executor.block()` panics with helpful message
+3. **Time APIs**: `std::time::Instant` unavailable - conditional `web_time` import
+4. **HTTP Client**: Web fetch API stub replaces native `http_client`
 
-- Is it showing a `no license specified` error for a crate you've created? If so, add `publish = false` under `[package]` in your crate's Cargo.toml.
-- Is the error `failed to satisfy license requirements` for a dependency? If so, first determine what license the project has and whether this system is sufficient to comply with this license's requirements. If you're unsure, ask a lawyer. Once you've verified that this system is acceptable add the license's SPDX identifier to the `accepted` array in `script/licenses/zed-licenses.toml`.
-- Is `cargo-about` unable to find the license for a dependency? If so, add a clarification field at the end of `script/licenses/zed-licenses.toml`, as specified in the [cargo-about book](https://embarkstudios.github.io/cargo-about/cli/generate/config.html#crate-configuration).
+All native platforms remain unchanged. See [`crates/gpui/src/platform/web/CHANGES.md`](crates/gpui/src/platform/web/CHANGES.md) for detailed documentation.
+
+## Building for Web
+
+### Prerequisites
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+```
+
+### Build an Example
+
+```bash
+cd crates/gpui_web_example
+wasm-pack build --target web --out-dir www/pkg
+```
+
+### Serve Locally
+
+```bash
+cd www && python3 -m http.server 8081
+```
+
+Open http://localhost:8081 in Chrome or Edge (WebGPU required).
+
+## Project Structure
+
+```
+crates/
+├── gpui/
+│   └── src/
+│       └── platform/
+│           ├── mac/          # macOS (Metal)
+│           ├── linux/        # Linux (Vulkan)
+│           ├── windows/      # Windows (DirectX)
+│           └── web/          # NEW: Web (WebGPU)
+│               ├── platform.rs
+│               ├── window.rs
+│               ├── renderer.rs
+│               ├── atlas.rs
+│               ├── text_system.rs
+│               ├── timer.rs
+│               ├── http_client.rs
+│               └── CHANGES.md
+└── gpui_web_example/         # WASM build harness
+    ├── src/lib.rs
+    └── www/
+        └── index.html
+```
+
+## Stats
+
+- **~5,300 lines** of new web platform code
+- **7 new files** in `platform/web/`
+- **~150 lines** of changes to core GPUI (all `cfg`-gated)
+- **0 changes** to native platform behavior
+
+## Related Links
+
+- [Zed Web Tracking Issue](https://github.com/zed-industries/zed/issues/5396)
+- [GPUI Documentation](https://www.gpui.rs/)
+- [Zed Repository](https://github.com/zed-industries/zed)
+
+## License
+
+Same as Zed - see [LICENSE](LICENSE).
