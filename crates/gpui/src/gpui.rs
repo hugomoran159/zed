@@ -79,7 +79,7 @@ pub use elements::*;
 pub use executor::*;
 pub use geometry::*;
 pub use global::*;
-pub use gpui_macros::{AppContext, IntoElement, Render, VisualContext, register_action, test};
+pub use gpui_macros::{AppContext, IntoElement, Render, VisualContext, main, register_action, test};
 pub use http_client;
 pub use input::*;
 pub use inspector::*;
@@ -93,7 +93,10 @@ pub use refineable::*;
 pub use scene::*;
 pub use shared_string::*;
 pub use shared_uri::*;
+#[cfg(not(target_arch = "wasm32"))]
 pub use smol::Timer;
+#[cfg(target_arch = "wasm32")]
+pub use platform::web::Timer;
 pub use style::*;
 pub use styled::*;
 pub use subscription::*;

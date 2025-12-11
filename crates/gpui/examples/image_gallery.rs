@@ -5,7 +5,6 @@ use gpui::{
     RetainAllImageCache, SharedString, TitlebarOptions, Window, WindowBounds, WindowOptions,
     actions, div, hash, image_cache, img, prelude::*, px, rgb, size,
 };
-use reqwest_client::ReqwestClient;
 use std::{collections::HashMap, sync::Arc};
 
 const IMAGES_IN_GALLERY: usize = 30;
@@ -22,13 +21,8 @@ impl ImageGallery {
         self.image_cache
             .update(cx, |image_cache, cx| image_cache.clear(window, cx));
 
-        let t = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-
-        self.image_key = format!("{}", t);
         self.total_count += self.items_count;
+        self.image_key = format!("{}", self.total_count);
         cx.notify();
     }
 }
@@ -244,13 +238,12 @@ impl ImageCache for SimpleLruCache {
 
 actions!(image, [Quit]);
 
+#[gpui::main]
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
 
     Application::new().run(move |cx: &mut App| {
-        let http_client = ReqwestClient::user_agent("gpui example").unwrap();
-        cx.set_http_client(Arc::new(http_client));
-
         cx.activate(true);
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);

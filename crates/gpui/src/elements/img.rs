@@ -19,8 +19,12 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use thiserror::Error;
 use util::ResultExt;
 
@@ -585,6 +589,7 @@ impl Asset for ImageDecoder {
 #[derive(Clone)]
 pub enum ImageAssetLoader {}
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Asset for ImageAssetLoader {
     type Source = Resource;
     type Output = Result<Arc<RenderImage>, ImageCacheError>;
@@ -596,6 +601,117 @@ impl Asset for ImageAssetLoader {
         let client = cx.http_client();
         // TODO: Can we make SVGs always rescale?
         // let scale_factor = cx.scale_factor();
+        let svg_renderer = cx.svg_renderer();
+        let asset_source = cx.asset_source().clone();
+        async move {
+            let bytes = match source.clone() {
+                Resource::Path(uri) => fs::read(uri.as_ref())?,
+                Resource::Uri(uri) => {
+                    let mut response = client
+                        .get(uri.as_ref(), ().into(), true)
+                        .await
+                        .with_context(|| format!("loading image asset from {uri:?}"))?;
+                    let mut body = Vec::new();
+                    response.body_mut().read_to_end(&mut body).await?;
+                    if !response.status().is_success() {
+                        let mut body = String::from_utf8_lossy(&body).into_owned();
+                        let first_line = body.lines().next().unwrap_or("").trim_end();
+                        body.truncate(first_line.len());
+                        return Err(ImageCacheError::BadStatus {
+                            uri,
+                            status: response.status(),
+                            body,
+                        });
+                    }
+                    body
+                }
+                Resource::Embedded(path) => {
+                    let data = asset_source.load(&path).ok().flatten();
+                    if let Some(data) = data {
+                        data.to_vec()
+                    } else {
+                        return Err(ImageCacheError::Asset(
+                            format!("Embedded resource not found: {}", path).into(),
+                        ));
+                    }
+                }
+            };
+
+            if let Ok(format) = image::guess_format(&bytes) {
+                let data = match format {
+                    ImageFormat::Gif => {
+                        let decoder = GifDecoder::new(Cursor::new(&bytes))?;
+                        let mut frames = SmallVec::new();
+
+                        for frame in decoder.into_frames() {
+                            let mut frame = frame?;
+                            // Convert from RGBA to BGRA.
+                            for pixel in frame.buffer_mut().chunks_exact_mut(4) {
+                                pixel.swap(0, 2);
+                            }
+                            frames.push(frame);
+                        }
+
+                        frames
+                    }
+                    ImageFormat::WebP => {
+                        let mut decoder = WebPDecoder::new(Cursor::new(&bytes))?;
+
+                        if decoder.has_animation() {
+                            let _ = decoder.set_background_color(Rgba([0, 0, 0, 0]));
+                            let mut frames = SmallVec::new();
+
+                            for frame in decoder.into_frames() {
+                                let mut frame = frame?;
+                                // Convert from RGBA to BGRA.
+                                for pixel in frame.buffer_mut().chunks_exact_mut(4) {
+                                    pixel.swap(0, 2);
+                                }
+                                frames.push(frame);
+                            }
+
+                            frames
+                        } else {
+                            let mut data = DynamicImage::from_decoder(decoder)?.into_rgba8();
+
+                            // Convert from RGBA to BGRA.
+                            for pixel in data.chunks_exact_mut(4) {
+                                pixel.swap(0, 2);
+                            }
+
+                            SmallVec::from_elem(Frame::new(data), 1)
+                        }
+                    }
+                    _ => {
+                        let mut data =
+                            image::load_from_memory_with_format(&bytes, format)?.into_rgba8();
+
+                        // Convert from RGBA to BGRA.
+                        for pixel in data.chunks_exact_mut(4) {
+                            pixel.swap(0, 2);
+                        }
+
+                        SmallVec::from_elem(Frame::new(data), 1)
+                    }
+                };
+
+                Ok(Arc::new(RenderImage::new(data)))
+            } else {
+                svg_renderer
+                    .render_single_frame(&bytes, 1.0, true)
+                    .map_err(Into::into)
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Asset for ImageAssetLoader {
+    type Source = Resource;
+    type Output = Result<Arc<RenderImage>, ImageCacheError>;
+
+    fn load(source: Self::Source, cx: &mut App) -> impl Future<Output = Self::Output> + 'static {
+        let client = cx.http_client();
         let svg_renderer = cx.svg_renderer();
         let asset_source = cx.asset_source().clone();
         async move {

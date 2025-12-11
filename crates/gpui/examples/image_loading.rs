@@ -1,4 +1,6 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
 
 use gpui::{
     Animation, AnimationExt, App, Application, Asset, AssetLogger, AssetSource, Bounds, Context,
@@ -7,8 +9,10 @@ use gpui::{
     pulsating_between, px, red, size,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 struct Assets {}
 
+#[cfg(not(target_arch = "wasm32"))]
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> anyhow::Result<Option<std::borrow::Cow<'static, [u8]>>> {
         std::fs::read(path)
@@ -28,7 +32,10 @@ impl AssetSource for Assets {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 const IMAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/image/app-icon.png");
+#[cfg(target_arch = "wasm32")]
+const IMAGE: &str = "assets/image/app-icon.png";
 
 #[derive(Copy, Clone, Hash)]
 struct LoadImageParameters {
@@ -38,6 +45,7 @@ struct LoadImageParameters {
 
 struct LoadImageWithParameters {}
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Asset for LoadImageWithParameters {
     type Source = LoadImageParameters;
 
@@ -64,9 +72,43 @@ impl Asset for LoadImageWithParameters {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+impl Asset for LoadImageWithParameters {
+    type Source = LoadImageParameters;
+
+    type Output = Result<Arc<RenderImage>, ImageCacheError>;
+
+    fn load(
+        parameters: Self::Source,
+        cx: &mut App,
+    ) -> impl std::future::Future<Output = Self::Output> + 'static {
+        let timer = cx.background_executor().timer(parameters.timeout);
+        let data = AssetLogger::<ImageAssetLoader>::load(Resource::Uri(IMAGE.into()), cx);
+        async move {
+            timer.await;
+            if parameters.fail {
+                log::error!("Intentionally failed to load image");
+                Err(anyhow::anyhow!("Failed to load image").into())
+            } else {
+                data.await
+            }
+        }
+    }
+}
+
 struct ImageLoadingExample {}
 
 impl ImageLoadingExample {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn nonexistent_image_source() -> Option<std::path::PathBuf> {
+        Some(Path::new("this/file/really/shouldn't/exist/or/won't/be/an/image/I/hope").to_path_buf())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn nonexistent_image_source() -> Option<std::path::PathBuf> {
+        None
+    }
+
     fn loading_element() -> impl IntoElement {
         div().size_full().flex_none().p_0p5().rounded_xs().child(
             div().size_full().with_animation(
@@ -169,45 +211,49 @@ impl Render for ImageLoadingExample {
                             cx.remove_asset::<LoadImageWithParameters>(&image_source);
                         })
                     })
-                    .child({
+                    .when_some(Self::nonexistent_image_source(), |this, source| {
                         // Ensure that the normal image loader doesn't spam logs
-                        let image_source = Path::new(
-                            "this/file/really/shouldn't/exist/or/won't/be/an/image/I/hope",
+                        this.child(
+                            img(source.clone())
+                                .id("image-4")
+                                .border_1()
+                                .size_12()
+                                .with_fallback(|| Self::fallback_element().into_any_element())
+                                .border_color(red())
+                                .with_loading(|| Self::loading_element().into_any_element())
+                                .on_click(move |_, _, cx| {
+                                    cx.remove_asset::<ImgResourceLoader>(&source.clone().into());
+                                }),
                         )
-                        .to_path_buf();
-                        img(image_source.clone())
-                            .id("image-4")
-                            .border_1()
-                            .size_12()
-                            .with_fallback(|| Self::fallback_element().into_any_element())
-                            .border_color(red())
-                            .with_loading(|| Self::loading_element().into_any_element())
-                            .on_click(move |_, _, cx| {
-                                cx.remove_asset::<ImgResourceLoader>(&image_source.clone().into());
-                            })
                     }),
             ),
         )
     }
 }
 
+#[gpui::main]
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
-    Application::new()
-        .with_assets(Assets {})
-        .run(|cx: &mut App| {
-            let options = WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(300.), px(300.)),
-                    cx,
-                ))),
-                ..Default::default()
-            };
-            cx.open_window(options, |_, cx| {
-                cx.activate(false);
-                cx.new(|_| ImageLoadingExample {})
-            })
-            .unwrap();
-        });
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let app = Application::new().with_assets(Assets {});
+    #[cfg(target_arch = "wasm32")]
+    let app = Application::new();
+
+    app.run(|cx: &mut App| {
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                None,
+                size(px(300.), px(300.)),
+                cx,
+            ))),
+            ..Default::default()
+        };
+        cx.open_window(options, |_, cx| {
+            cx.activate(false);
+            cx.new(|_| ImageLoadingExample {})
+        })
+        .unwrap();
+    });
 }

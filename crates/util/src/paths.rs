@@ -17,7 +17,9 @@ use std::{
 };
 
 use crate::rel_path::RelPathBuf;
-use crate::{rel_path::RelPath, shell::ShellKind};
+use crate::rel_path::RelPath;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::shell::ShellKind;
 
 static HOME_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -73,6 +75,12 @@ pub trait PathExt {
                 })
                 .with_context(|| format!("Invalid WTF-8 sequence: {bytes:?}"))
         }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let s = std::str::from_utf8(bytes)
+                .with_context(|| format!("Invalid UTF-8 sequence: {bytes:?}"))?;
+            Ok(Self::from(Path::new(s)))
+        }
     }
 
     /// Converts a local path to one that can be used inside of WSL.
@@ -86,6 +94,7 @@ pub trait PathExt {
     fn multiple_extensions(&self) -> Option<String>;
 
     /// Try to make a shell-safe representation of the path.
+    #[cfg(not(target_arch = "wasm32"))]
     fn try_shell_safe(&self, shell_kind: ShellKind) -> anyhow::Result<String>;
 }
 
@@ -164,6 +173,7 @@ impl<T: AsRef<Path>> PathExt for T {
         Some(parts.into_iter().join("."))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn try_shell_safe(&self, shell_kind: ShellKind) -> anyhow::Result<String> {
         let path_str = self
             .as_ref()

@@ -1,5 +1,8 @@
 [workspace]
 resolver = "2"
+exclude = [
+    "crates/gpui_web_example",
+]
 members = [
     "crates/acp_tools",
     "crates/acp_thread",

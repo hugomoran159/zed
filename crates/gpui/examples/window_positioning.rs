@@ -67,6 +67,7 @@ fn build_window_options(display_id: DisplayId, bounds: Bounds<Pixels>) -> Window
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         // Create several new windows, positioned in the top right corner of each screen

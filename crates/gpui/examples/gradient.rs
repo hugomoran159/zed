@@ -242,6 +242,7 @@ impl Render for GradientViewer {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         cx.open_window(

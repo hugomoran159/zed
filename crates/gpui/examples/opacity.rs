@@ -1,15 +1,21 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::{fs, path::PathBuf};
 
+#[cfg(not(target_arch = "wasm32"))]
 use anyhow::Result;
 use gpui::{
-    App, Application, AssetSource, Bounds, BoxShadow, ClickEvent, Context, SharedString, Task,
+    App, Application, Bounds, BoxShadow, ClickEvent, Context, SharedUri, Task,
     Window, WindowBounds, WindowOptions, div, hsla, img, point, prelude::*, px, rgb, size, svg,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use gpui::{AssetSource, SharedString};
 
+#[cfg(not(target_arch = "wasm32"))]
 struct Assets {
     base: PathBuf,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
         fs::read(self.base.join(path))
@@ -117,7 +123,13 @@ impl Render for HelloWorld {
                                 spread_radius: px(5.0),
                                 offset: point(px(10.0), px(10.0)),
                             }])
-                            .child(img("image/app-icon.png").size_8())
+                            .child({
+                                #[cfg(not(target_arch = "wasm32"))]
+                                let icon = img("image/app-icon.png");
+                                #[cfg(target_arch = "wasm32")]
+                                let icon = img(SharedUri::from("assets/image/app-icon.png"));
+                                icon.size_8()
+                            })
                             .child("Opacity Panel (Click to test)")
                             .child(
                                 div()
@@ -133,13 +145,16 @@ impl Render for HelloWorld {
                                     .text_decoration_color(gpui::red())
                                     .child(format!("opacity: {:.1}", self.opacity)),
                             )
-                            .child(
-                                svg()
-                                    .path("image/arrow_circle.svg")
+                            .child({
+                                #[cfg(not(target_arch = "wasm32"))]
+                                let svg_element = svg().path("image/arrow_circle.svg");
+                                #[cfg(target_arch = "wasm32")]
+                                let svg_element = svg().external_path("assets/image/arrow_circle.svg");
+                                svg_element
                                     .text_color(gpui::black())
                                     .text_2xl()
-                                    .size_8(),
-                            )
+                                    .size_8()
+                            })
                             .child(
                                 div()
                                     .flex()
@@ -149,18 +164,27 @@ impl Render for HelloWorld {
                                             .hover(|style| style.opacity(0.5))
                                     })),
                             )
-                            .child(img("image/black-cat-typing.gif").size_12()),
+                            .child({
+                                #[cfg(not(target_arch = "wasm32"))]
+                                let gif = img("image/black-cat-typing.gif");
+                                #[cfg(target_arch = "wasm32")]
+                                let gif = img(SharedUri::from("assets/image/black-cat-typing.gif"));
+                                gif.size_12()
+                            }),
                     ),
             )
     }
 }
 
+#[gpui::main]
 fn main() {
-    Application::new()
-        .with_assets(Assets {
-            base: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples"),
-        })
-        .run(|cx: &mut App| {
+    #[cfg(not(target_arch = "wasm32"))]
+    let app = Application::new().with_assets(Assets {
+        base: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples"),
+    });
+    #[cfg(target_arch = "wasm32")]
+    let app = Application::new();
+    app.run(|cx: &mut App| {
             let bounds = Bounds::centered(None, size(px(500.0), px(500.0)), cx);
             cx.open_window(
                 WindowOptions {

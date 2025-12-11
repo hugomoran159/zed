@@ -120,6 +120,7 @@ impl Render for DragDrop {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(800.), px(600.0)), cx);

@@ -19,6 +19,7 @@ impl Render for SetMenus {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         cx.set_global(AppState::new());

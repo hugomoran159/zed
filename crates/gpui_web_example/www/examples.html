@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>GPUI Web Examples</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 40px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f5f5;
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .subtitle {
+            margin: 0 0 30px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .examples {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+        }
+        .example-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-decoration: none;
+            color: inherit;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .example-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        .example-card h2 {
+            margin: 0 0 8px 0;
+            font-size: 18px;
+            color: #0066cc;
+        }
+        .example-card p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>GPUI Web Examples</h1>
+    <p class="subtitle">All 31 GPUI examples compiled to WebAssembly</p>
+    <div class="examples">
+        <a href="example.html?e=hello_world" class="example-card">
+            <h2>Hello World</h2>
+            <p>Basic GPUI application with a simple counter</p>
+        </a>
+        <a href="example.html?e=painting" class="example-card">
+            <h2>Painting</h2>
+            <p>Path rendering, gradients, and stroke styles</p>
+        </a>
+        <a href="example.html?e=gradient" class="example-card">
+            <h2>Gradient</h2>
+            <p>Linear gradients in different color spaces</p>
+        </a>
+        <a href="example.html?e=animation" class="example-card">
+            <h2>Animation</h2>
+            <p>Element animations and transformations</p>
+        </a>
+        <a href="example.html?e=text" class="example-card">
+            <h2>Text</h2>
+            <p>Typography and text rendering</p>
+        </a>
+        <a href="example.html?e=shadow" class="example-card">
+            <h2>Shadow</h2>
+            <p>Box shadows and elevation effects</p>
+        </a>
+        <a href="example.html?e=opacity" class="example-card">
+            <h2>Opacity</h2>
+            <p>Transparency and opacity blending</p>
+        </a>
+        <a href="example.html?e=input" class="example-card">
+            <h2>Input</h2>
+            <p>Text input fields and form controls</p>
+        </a>
+        <a href="example.html?e=scrollable" class="example-card">
+            <h2>Scrollable</h2>
+            <p>Scrollable containers and lists</p>
+        </a>
+        <a href="example.html?e=data_table" class="example-card">
+            <h2>Data Table</h2>
+            <p>Virtualized data table with sorting</p>
+        </a>
+        <a href="example.html?e=drag_drop" class="example-card">
+            <h2>Drag and Drop</h2>
+            <p>Drag and drop interactions</p>
+        </a>
+        <a href="example.html?e=focus_visible" class="example-card">
+            <h2>Focus Visible</h2>
+            <p>Focus states and keyboard navigation</p>
+        </a>
+        <a href="example.html?e=gif_viewer" class="example-card">
+            <h2>GIF Viewer</h2>
+            <p>Animated GIF image rendering</p>
+        </a>
+        <a href="example.html?e=grid_layout" class="example-card">
+            <h2>Grid Layout</h2>
+            <p>CSS Grid-style layout system</p>
+        </a>
+        <a href="example.html?e=image" class="example-card">
+            <h2>Image</h2>
+            <p>Image loading and display</p>
+        </a>
+        <a href="example.html?e=image_gallery" class="example-card">
+            <h2>Image Gallery</h2>
+            <p>Gallery with remote image loading</p>
+        </a>
+        <a href="example.html?e=image_loading" class="example-card">
+            <h2>Image Loading</h2>
+            <p>Async image loading states</p>
+        </a>
+        <a href="example.html?e=on_window_close_quit" class="example-card">
+            <h2>Window Close Quit</h2>
+            <p>Handling window close events</p>
+        </a>
+        <a href="example.html?e=ownership_post" class="example-card">
+            <h2>Ownership Post</h2>
+            <p>Entity ownership and events</p>
+        </a>
+        <a href="example.html?e=paths_bench" class="example-card">
+            <h2>Paths Bench</h2>
+            <p>Path rendering performance test</p>
+        </a>
+        <a href="example.html?e=pattern" class="example-card">
+            <h2>Pattern</h2>
+            <p>Pattern fills and backgrounds</p>
+        </a>
+        <a href="example.html?e=set_menus" class="example-card">
+            <h2>Set Menus</h2>
+            <p>Application menu configuration</p>
+        </a>
+        <a href="example.html?e=svg" class="example-card">
+            <h2>SVG</h2>
+            <p>SVG icon rendering</p>
+        </a>
+        <a href="example.html?e=tab_stop" class="example-card">
+            <h2>Tab Stop</h2>
+            <p>Tab navigation order</p>
+        </a>
+        <a href="example.html?e=text_layout" class="example-card">
+            <h2>Text Layout</h2>
+            <p>Advanced text layout features</p>
+        </a>
+        <a href="example.html?e=text_wrapper" class="example-card">
+            <h2>Text Wrapper</h2>
+            <p>Text wrapping and overflow</p>
+        </a>
+        <a href="example.html?e=tree" class="example-card">
+            <h2>Tree</h2>
+            <p>Tree view component</p>
+        </a>
+        <a href="example.html?e=uniform_list" class="example-card">
+            <h2>Uniform List</h2>
+            <p>Virtualized uniform-height list</p>
+        </a>
+        <a href="example.html?e=window" class="example-card">
+            <h2>Window</h2>
+            <p>Window management features</p>
+        </a>
+        <a href="example.html?e=window_positioning" class="example-card">
+            <h2>Window Positioning</h2>
+            <p>Multi-monitor window placement</p>
+        </a>
+        <a href="example.html?e=window_shadow" class="example-card">
+            <h2>Window Shadow</h2>
+            <p>Custom window shadow effects</p>
+        </a>
+    </div>
+</body>
+</html>

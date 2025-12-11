@@ -1,7 +1,10 @@
 use crate::{App, PlatformDispatcher, RunnableMeta, RunnableVariant};
 use async_task::Runnable;
 use futures::channel::mpsc;
+#[cfg(not(target_arch = "wasm32"))]
 use smol::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use futures::StreamExt as _;
 use std::{
     fmt::Debug,
     marker::PhantomData,
@@ -16,8 +19,12 @@ use std::{
     },
     task::{Context, Poll},
     thread::{self, ThreadId},
-    time::{Duration, Instant},
+    time::Duration,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use util::TryFutureExt;
 use waker_fn::waker_fn;
 
@@ -102,7 +109,10 @@ impl<T> Future for Task<T> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         match unsafe { self.get_unchecked_mut() } {
             Task(TaskState::Ready(val)) => Poll::Ready(val.take().unwrap()),
-            Task(TaskState::Spawned(task)) => task.poll(cx),
+            Task(TaskState::Spawned(task)) => {
+                let pinned = unsafe { Pin::new_unchecked(task) };
+                pinned.poll(cx)
+            }
         }
     }
 }
@@ -133,7 +143,12 @@ impl TaskLabel {
 
 type AnyLocalFuture<R> = Pin<Box<dyn 'static + Future<Output = R>>>;
 
+/// On native platforms, background futures must be Send (they run on a thread pool).
+/// On WASM, there's only one thread, so Send is not required.
+#[cfg(not(target_arch = "wasm32"))]
 type AnyFuture<R> = Pin<Box<dyn 'static + Send + Future<Output = R>>>;
+#[cfg(target_arch = "wasm32")]
+type AnyFuture<R> = Pin<Box<dyn 'static + Future<Output = R>>>;
 
 /// BackgroundExecutor lets you run things on background threads.
 /// In production this is a thread pool with no ordering guarantees.
@@ -146,6 +161,9 @@ impl BackgroundExecutor {
     }
 
     /// Enqueues the given future to be run to completion on a background thread.
+    /// On native platforms, the future must be `Send` since it runs on a thread pool.
+    /// On WASM, `Send` is not required since there's only one thread.
+    #[cfg(not(target_arch = "wasm32"))]
     #[track_caller]
     pub fn spawn<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Task<R>
     where
@@ -155,7 +173,19 @@ impl BackgroundExecutor {
     }
 
     /// Enqueues the given future to be run to completion on a background thread.
+    /// On WASM, `Send` is not required since there's only one thread.
+    #[cfg(target_arch = "wasm32")]
+    #[track_caller]
+    pub fn spawn<R>(&self, future: impl Future<Output = R> + 'static) -> Task<R>
+    where
+        R: 'static,
+    {
+        self.spawn_internal::<R>(Box::pin(future), None)
+    }
+
+    /// Enqueues the given future to be run to completion on a background thread.
     /// The given label can be used to control the priority of the task in tests.
+    #[cfg(not(target_arch = "wasm32"))]
     #[track_caller]
     pub fn spawn_labeled<R>(
         &self,
@@ -168,6 +198,23 @@ impl BackgroundExecutor {
         self.spawn_internal::<R>(Box::pin(future), Some(label))
     }
 
+    /// Enqueues the given future to be run to completion on a background thread.
+    /// The given label can be used to control the priority of the task in tests.
+    /// On WASM, `Send` is not required since there's only one thread.
+    #[cfg(target_arch = "wasm32")]
+    #[track_caller]
+    pub fn spawn_labeled<R>(
+        &self,
+        label: TaskLabel,
+        future: impl Future<Output = R> + 'static,
+    ) -> Task<R>
+    where
+        R: 'static,
+    {
+        self.spawn_internal::<R>(Box::pin(future), Some(label))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     #[track_caller]
     fn spawn_internal<R: Send + 'static>(
         &self,
@@ -186,6 +233,24 @@ impl BackgroundExecutor {
         Task(TaskState::Spawned(task))
     }
 
+    #[cfg(target_arch = "wasm32")]
+    #[track_caller]
+    fn spawn_internal<R: 'static>(
+        &self,
+        future: AnyFuture<R>,
+        label: Option<TaskLabel>,
+    ) -> Task<R> {
+        let dispatcher = self.dispatcher.clone();
+        let location = core::panic::Location::caller();
+        let (runnable, task) = spawn_local_with_source_location(
+            future,
+            move |runnable| dispatcher.dispatch(RunnableVariant::Meta(runnable), label),
+            RunnableMeta { location },
+        );
+        runnable.schedule();
+        Task(TaskState::Spawned(task))
+    }
+
     /// Used by the test harness to run an async test in a synchronous fashion.
     #[cfg(any(test, feature = "test-support"))]
     #[track_caller]
@@ -199,6 +264,7 @@ impl BackgroundExecutor {
 
     /// Block the current thread until the given future resolves.
     /// Consider using `block_with_timeout` instead.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn block<R>(&self, future: impl Future<Output = R>) -> R {
         if let Ok(value) = self.block_internal(true, future, None) {
             value
@@ -207,15 +273,19 @@ impl BackgroundExecutor {
         }
     }
 
-    #[cfg(not(any(test, feature = "test-support")))]
+    /// Block is not supported on WASM - use async/await instead.
+    #[cfg(target_arch = "wasm32")]
+    pub fn block<R>(&self, _future: impl Future<Output = R>) -> R {
+        panic!("block() is not supported on WASM - use async/await instead")
+    }
+
+    #[cfg(not(any(test, feature = "test-support", target_arch = "wasm32")))]
     pub(crate) fn block_internal<Fut: Future>(
         &self,
         _background_only: bool,
         future: Fut,
         timeout: Option<Duration>,
     ) -> Result<Fut::Output, impl Future<Output = Fut::Output> + use<Fut>> {
-        use std::time::Instant;
-
         let mut future = Box::pin(future);
         if timeout == Some(Duration::ZERO) {
             return Err(future);
@@ -340,12 +410,23 @@ impl BackgroundExecutor {
 
     /// Block the current thread until the given future resolves
     /// or `duration` has elapsed.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn block_with_timeout<Fut: Future>(
         &self,
         duration: Duration,
         future: Fut,
     ) -> Result<Fut::Output, impl Future<Output = Fut::Output> + use<Fut>> {
         self.block_internal(true, future, Some(duration))
+    }
+
+    /// Block with timeout is not supported on WASM.
+    #[cfg(target_arch = "wasm32")]
+    pub fn block_with_timeout<Fut: Future>(
+        &self,
+        _duration: Duration,
+        _future: Fut,
+    ) -> Result<Fut::Output, Fut> {
+        panic!("block_with_timeout() is not supported on WASM - use async/await instead")
     }
 
     /// Scoped lets you start a number of tasks and waits

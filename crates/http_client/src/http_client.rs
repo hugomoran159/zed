@@ -1,23 +1,44 @@
+#[cfg(not(target_arch = "wasm32"))]
 mod async_body;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod github;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod github_download;
+#[cfg(target_arch = "wasm32")]
+mod web;
 
 pub use anyhow::{Result, anyhow};
+#[cfg(not(target_arch = "wasm32"))]
 pub use async_body::{AsyncBody, Inner};
+#[cfg(target_arch = "wasm32")]
+pub use web::{AsyncBody, WebHttpClient};
+#[cfg(not(target_arch = "wasm32"))]
 use derive_more::Deref;
 use http::HeaderValue;
 pub use http::{self, Method, Request, Response, StatusCode, Uri, request::Builder};
 
-use futures::{
-    FutureExt as _,
-    future::{self, BoxFuture},
-};
+#[cfg(not(target_arch = "wasm32"))]
+use futures::{FutureExt as _, future};
+#[cfg(target_arch = "wasm32")]
+use futures::future::LocalBoxFuture;
+#[cfg(not(target_arch = "wasm32"))]
 use parking_lot::Mutex;
+#[cfg(not(target_arch = "wasm32"))]
 use serde::Serialize;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
-#[cfg(feature = "test-support")]
+#[cfg(all(feature = "test-support", not(target_arch = "wasm32")))]
 use std::{any::type_name, fmt};
+#[cfg(not(target_arch = "wasm32"))]
 pub use url::{Host, Url};
+#[cfg(target_arch = "wasm32")]
+pub use web::Url;
+
+/// Type alias for HTTP futures - Send on native, non-Send on WASM
+#[cfg(not(target_arch = "wasm32"))]
+pub type HttpFuture<'a, T> = futures::future::BoxFuture<'a, T>;
+#[cfg(target_arch = "wasm32")]
+pub type HttpFuture<'a, T> = LocalBoxFuture<'a, T>;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RedirectPolicy {
@@ -58,6 +79,9 @@ impl HttpRequestExt for http::request::Builder {
     }
 }
 
+/// HTTP client trait for making HTTP requests.
+/// On native platforms, this requires Send + Sync. On WASM, these bounds are not required.
+#[cfg(not(target_arch = "wasm32"))]
 pub trait HttpClient: 'static + Send + Sync {
     fn user_agent(&self) -> Option<&HeaderValue>;
 
@@ -66,14 +90,14 @@ pub trait HttpClient: 'static + Send + Sync {
     fn send(
         &self,
         req: http::Request<AsyncBody>,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>>;
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>>;
 
     fn get(
         &self,
         uri: &str,
         body: AsyncBody,
         follow_redirects: bool,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         let request = Builder::new()
             .uri(uri)
             .follow_redirects(if follow_redirects {
@@ -93,7 +117,7 @@ pub trait HttpClient: 'static + Send + Sync {
         &self,
         uri: &str,
         body: AsyncBody,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         let request = Builder::new()
             .uri(uri)
             .method(Method::POST)
@@ -115,12 +139,68 @@ pub trait HttpClient: 'static + Send + Sync {
         &'a self,
         _url: &str,
         _request: reqwest::multipart::Form,
-    ) -> BoxFuture<'a, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'a, anyhow::Result<Response<AsyncBody>>> {
         future::ready(Err(anyhow!("not implemented"))).boxed()
     }
 }
 
+/// HTTP client trait for WASM - no Send + Sync bounds required
+#[cfg(target_arch = "wasm32")]
+pub trait HttpClient: 'static {
+    fn user_agent(&self) -> Option<&HeaderValue>;
+
+    fn proxy(&self) -> Option<&Url>;
+
+    fn send(
+        &self,
+        req: http::Request<AsyncBody>,
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>>;
+
+    fn get(
+        &self,
+        uri: &str,
+        body: AsyncBody,
+        follow_redirects: bool,
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+        let request = Builder::new()
+            .uri(uri)
+            .follow_redirects(if follow_redirects {
+                RedirectPolicy::FollowAll
+            } else {
+                RedirectPolicy::NoFollow
+            })
+            .body(body);
+
+        match request {
+            Ok(request) => self.send(request),
+            Err(e) => Box::pin(async move { Err(e.into()) }),
+        }
+    }
+
+    fn post_json(
+        &self,
+        uri: &str,
+        body: AsyncBody,
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+        let request = Builder::new()
+            .uri(uri)
+            .method(Method::POST)
+            .header("Content-Type", "application/json")
+            .body(body);
+
+        match request {
+            Ok(request) => self.send(request),
+            Err(e) => Box::pin(async move { Err(e.into()) }),
+        }
+    }
+}
+
+// ============================================================================
+// Native-only types below (not available on WASM)
+// ============================================================================
+
 /// An [`HttpClient`] that may have a proxy.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Deref)]
 pub struct HttpClientWithProxy {
     #[deref]
@@ -128,6 +208,7 @@ pub struct HttpClientWithProxy {
     proxy: Option<Url>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpClientWithProxy {
     /// Returns a new [`HttpClientWithProxy`] with the given proxy URL.
     pub fn new(client: Arc<dyn HttpClient>, proxy_url: Option<String>) -> Self {
@@ -145,11 +226,12 @@ impl HttpClientWithProxy {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpClient for HttpClientWithProxy {
     fn send(
         &self,
         req: Request<AsyncBody>,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         self.client.send(req)
     }
 
@@ -170,12 +252,13 @@ impl HttpClient for HttpClientWithProxy {
         &'a self,
         url: &str,
         form: reqwest::multipart::Form,
-    ) -> BoxFuture<'a, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'a, anyhow::Result<Response<AsyncBody>>> {
         self.client.send_multipart_form(url, form)
     }
 }
 
 /// An [`HttpClient`] that has a base URL.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Deref)]
 pub struct HttpClientWithUrl {
     base_url: Mutex<String>,
@@ -183,6 +266,7 @@ pub struct HttpClientWithUrl {
     client: HttpClientWithProxy,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpClientWithUrl {
     /// Returns a new [`HttpClientWithUrl`] with the given base URL.
     pub fn new(
@@ -286,11 +370,12 @@ impl HttpClientWithUrl {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpClient for HttpClientWithUrl {
     fn send(
         &self,
         req: Request<AsyncBody>,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         self.client.send(req)
     }
 
@@ -311,11 +396,12 @@ impl HttpClient for HttpClientWithUrl {
         &'a self,
         url: &str,
         request: reqwest::multipart::Form,
-    ) -> BoxFuture<'a, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'a, anyhow::Result<Response<AsyncBody>>> {
         self.client.send_multipart_form(url, request)
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn read_proxy_from_env() -> Option<Url> {
     const ENV_VARS: &[&str] = &[
         "ALL_PROXY",
@@ -332,25 +418,29 @@ pub fn read_proxy_from_env() -> Option<Url> {
         .and_then(|env| env.parse().ok())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn read_no_proxy_from_env() -> Option<String> {
     const ENV_VARS: &[&str] = &["NO_PROXY", "no_proxy"];
 
     ENV_VARS.iter().find_map(|var| std::env::var(var).ok())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct BlockedHttpClient;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl BlockedHttpClient {
     pub fn new() -> Self {
         BlockedHttpClient
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpClient for BlockedHttpClient {
     fn send(
         &self,
         _req: Request<AsyncBody>,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         Box::pin(async {
             Err(std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
@@ -374,21 +464,21 @@ impl HttpClient for BlockedHttpClient {
     }
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(all(feature = "test-support", not(target_arch = "wasm32")))]
 type FakeHttpHandler = Arc<
-    dyn Fn(Request<AsyncBody>) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>>
+    dyn Fn(Request<AsyncBody>) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>>
         + Send
         + Sync
         + 'static,
 >;
 
-#[cfg(feature = "test-support")]
+#[cfg(all(feature = "test-support", not(target_arch = "wasm32")))]
 pub struct FakeHttpClient {
     handler: Mutex<Option<FakeHttpHandler>>,
     user_agent: HeaderValue,
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(all(feature = "test-support", not(target_arch = "wasm32")))]
 impl FakeHttpClient {
     pub fn create<Fut, F>(handler: F) -> Arc<HttpClientWithUrl>
     where
@@ -440,19 +530,19 @@ impl FakeHttpClient {
     }
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(all(feature = "test-support", not(target_arch = "wasm32")))]
 impl fmt::Debug for FakeHttpClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FakeHttpClient").finish()
     }
 }
 
-#[cfg(feature = "test-support")]
+#[cfg(all(feature = "test-support", not(target_arch = "wasm32")))]
 impl HttpClient for FakeHttpClient {
     fn send(
         &self,
         req: Request<AsyncBody>,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
+    ) -> HttpFuture<'static, anyhow::Result<Response<AsyncBody>>> {
         ((self.handler.lock().as_ref().unwrap())(req)) as _
     }
 

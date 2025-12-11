@@ -44,6 +44,7 @@ impl Render for Scrollable {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(500.), px(500.0)), cx);

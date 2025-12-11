@@ -23,6 +23,9 @@ mod test;
 #[cfg(target_os = "windows")]
 mod windows;
 
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod web;
+
 #[cfg(all(
     feature = "screen-capture",
     any(
@@ -57,7 +60,12 @@ use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::io::Cursor;
 use std::ops;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use std::{
     fmt::{self, Debug},
     ops::Range,
@@ -80,6 +88,8 @@ pub(crate) use mac::*;
 pub(crate) use test::*;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::*;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use web::*;
 
 #[cfg(all(target_os = "linux", feature = "wayland"))]
 pub use linux::layer_shell;
@@ -129,6 +139,11 @@ pub(crate) fn current_platform(_headless: bool) -> Rc<dyn Platform> {
             .inspect_err(|err| show_error("Failed to launch", err.to_string()))
             .unwrap(),
     )
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn current_platform(_headless: bool) -> Rc<dyn Platform> {
+    WebPlatform::new()
 }
 
 /// Return which compositor we're guessing we'll use.
@@ -502,6 +517,12 @@ pub(crate) trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn draw(&self, scene: &Scene);
     fn completed_frame(&self) {}
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
+    /// Returns true if the renderer is ready to draw.
+    /// On most platforms this is always true, but on web it may be false
+    /// until async WebGPU initialization completes.
+    fn is_renderer_ready(&self) -> bool {
+        true
+    }
 
     // macOS specific methods
     fn get_title(&self) -> String {
@@ -609,6 +630,9 @@ pub(crate) trait PlatformTextSystem: Send + Sync {
         raster_bounds: Bounds<DevicePixels>,
     ) -> Result<(Size<DevicePixels>, Vec<u8>)>;
     fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout;
+
+    #[cfg(target_arch = "wasm32")]
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 pub(crate) struct NoopTextSystem;
@@ -729,6 +753,11 @@ impl PlatformTextSystem for NoopTextSystem {
             len: text.len(),
         }
     }
+
+    #[cfg(target_arch = "wasm32")]
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 // Adapted from https://github.com/microsoft/terminal/blob/1283c0f5b99a2961673249fa77c6b986efb5086c/src/renderer/atlas/dwrite.cpp
@@ -823,9 +852,9 @@ pub(crate) trait PlatformAtlas: Send + Sync {
     fn remove(&self, key: &AtlasKey);
 }
 
-struct AtlasTextureList<T> {
-    textures: Vec<Option<T>>,
-    free_list: Vec<usize>,
+pub(crate) struct AtlasTextureList<T> {
+    pub(crate) textures: Vec<Option<T>>,
+    pub(crate) free_list: Vec<usize>,
 }
 
 impl<T> Default for AtlasTextureList<T> {

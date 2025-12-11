@@ -191,6 +191,7 @@ impl Render for Example {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         cx.bind_keys([

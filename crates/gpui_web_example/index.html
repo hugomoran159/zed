@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>GPUI Web Example</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import init from './pkg/gpui_web_example.js';
+
+        async function run() {
+            try {
+                await init();
+                console.log('GPUI initialized successfully');
+            } catch (e) {
+                console.error('Failed to initialize GPUI:', e);
+            }
+        }
+
+        run();
+    </script>
+</body>
+</html>

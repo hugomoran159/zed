@@ -70,6 +70,7 @@ impl TextSystem {
             font_ids_by_font: RwLock::default(),
             wrapper_pool: Mutex::default(),
             font_runs_pool: Mutex::default(),
+            #[cfg(not(target_arch = "wasm32"))]
             fallback_font_stack: smallvec![
                 // TODO: Remove this when Linux have implemented setting fallbacks.
                 font(".ZedMono"),
@@ -82,6 +83,17 @@ impl TextSystem {
                 font("Noto Sans"),    // KDE
                 font("DejaVu Sans"),
                 font("Arial"), // macOS, Windows
+            ],
+            #[cfg(target_arch = "wasm32")]
+            fallback_font_stack: smallvec![
+                // Web fonts - these need to be loaded by the application
+                font("Inter"),
+                font("Roboto"),
+                font("Open Sans"),
+                font("Noto Sans"),
+                font("Arial"),
+                font("Helvetica"),
+                font("sans-serif"),
             ],
         }
     }
@@ -103,6 +115,20 @@ impl TextSystem {
     /// Add a font's data to the text system.
     pub fn add_fonts(&self, fonts: Vec<Cow<'static, [u8]>>) -> Result<()> {
         self.platform_text_system.add_fonts(fonts)
+    }
+
+    /// Load a font from a URL. Only available on WASM.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn load_font_from_url(&self, url: &str) -> Result<()> {
+        use crate::platform::web::text_system::WebTextSystem;
+
+        let web_text_system = self
+            .platform_text_system
+            .as_any()
+            .downcast_ref::<WebTextSystem>()
+            .ok_or_else(|| anyhow!("Expected WebTextSystem on WASM platform"))?;
+
+        web_text_system.load_font_from_url(url).await
     }
 
     /// Get the FontId for the configure font family and style.

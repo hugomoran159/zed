@@ -37,6 +37,9 @@ impl From<Arc<Path>> for Resource {
 }
 
 /// A trait for asynchronous asset loading.
+/// On native platforms, the future must be `Send` since assets are loaded on background threads.
+/// On WASM, `Send` is not required since there's only one thread.
+#[cfg(not(target_arch = "wasm32"))]
 pub trait Asset: 'static {
     /// The source of the asset.
     type Source: Clone + Hash + Send;
@@ -51,12 +54,27 @@ pub trait Asset: 'static {
     ) -> impl Future<Output = Self::Output> + Send + 'static;
 }
 
+/// A trait for asynchronous asset loading.
+/// On WASM, `Send` is not required since there's only one thread.
+#[cfg(target_arch = "wasm32")]
+pub trait Asset: 'static {
+    /// The source of the asset.
+    type Source: Clone + Hash + Send;
+
+    /// The loaded asset
+    type Output: Clone + Send;
+
+    /// Load the asset asynchronously
+    fn load(source: Self::Source, cx: &mut App) -> impl Future<Output = Self::Output> + 'static;
+}
+
 /// An asset Loader which logs the [`Err`] variant of a [`Result`] during loading
 pub enum AssetLogger<T> {
     #[doc(hidden)]
     _Phantom(PhantomData<T>, &'static dyn crate::seal::Sealed),
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl<T, R, E> Asset for AssetLogger<T>
 where
     T: Asset<Output = Result<R, E>>,
@@ -71,6 +89,23 @@ where
         source: Self::Source,
         cx: &mut App,
     ) -> impl Future<Output = Self::Output> + Send + 'static {
+        let load = T::load(source, cx);
+        load.inspect_err(|e| log::error!("Failed to load asset: {}", e))
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl<T, R, E> Asset for AssetLogger<T>
+where
+    T: Asset<Output = Result<R, E>>,
+    R: Clone + Send,
+    E: Clone + Send + std::fmt::Display,
+{
+    type Source = T::Source;
+
+    type Output = T::Output;
+
+    fn load(source: Self::Source, cx: &mut App) -> impl Future<Output = Self::Output> + 'static {
         let load = T::load(source, cx);
         load.inspect_err(|e| log::error!("Failed to load asset: {}", e))
     }

@@ -1,0 +1,15 @@
+{
+  "name": "gpui_web_example",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "gpui_web_example_bg.wasm",
+    "gpui_web_example.js",
+    "gpui_web_example.d.ts"
+  ],
+  "main": "gpui_web_example.js",
+  "types": "gpui_web_example.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

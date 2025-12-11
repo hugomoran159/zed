@@ -1,4 +1,8 @@
-use std::{fs, path::Path, sync::Arc};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{fs, path::Path};
+use std::sync::Arc;
+#[cfg(target_arch = "wasm32")]
+use futures::AsyncReadExt;
 
 use crate::{
     App, Asset, Bounds, Element, GlobalElementId, Hitbox, InspectorElementId, InteractiveElement,
@@ -260,6 +264,7 @@ impl Transformation {
 
 enum SvgAsset {}
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Asset for SvgAsset {
     type Source = SharedString;
     type Output = Result<Arc<[u8]>, Arc<std::io::Error>>;
@@ -272,6 +277,36 @@ impl Asset for SvgAsset {
             let bytes = fs::read(Path::new(source.as_ref())).map_err(|e| Arc::new(e))?;
             let bytes = Arc::from(bytes);
             Ok(bytes)
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Asset for SvgAsset {
+    type Source = SharedString;
+    type Output = Result<Arc<[u8]>, Arc<std::io::Error>>;
+
+    fn load(
+        source: Self::Source,
+        cx: &mut App,
+    ) -> impl Future<Output = Self::Output> + 'static {
+        let http_client = cx.http_client();
+        async move {
+            let source_str = source.as_ref();
+            let mut response = http_client.get(source_str, Default::default(), true).await.map_err(|e| {
+                Arc::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("HTTP request failed: {}", e),
+                ))
+            })?;
+            let mut body = Vec::new();
+            response.body_mut().read_to_end(&mut body).await.map_err(|e| {
+                Arc::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to read response body: {}", e),
+                ))
+            })?;
+            Ok(Arc::from(body))
         }
     }
 }

@@ -79,6 +79,17 @@ screen-capture = [
     "scap",
 ]
 windows-manifest = []
+web = [
+    "wgpu",
+    "web-sys",
+    "wasm-bindgen",
+    "wasm-bindgen-futures",
+    "js-sys",
+    "cosmic-text",
+    "bytemuck",
+    "default_fonts",
+]
+default_fonts = []
 
 [lib]
 path = "src/gpui.rs"
@@ -99,7 +110,6 @@ derive_more.workspace = true
 etagere = "0.2"
 futures.workspace = true
 gpui_macros.workspace = true
-http_client.workspace = true
 image.workspace = true
 inventory.workspace = true
 itertools.workspace = true
@@ -126,7 +136,6 @@ serde.workspace = true
 serde_json.workspace = true
 slotmap.workspace = true
 smallvec.workspace = true
-smol.workspace = true
 stacksafe.workspace = true
 strum.workspace = true
 sum_tree.workspace = true
@@ -140,6 +149,13 @@ libc.workspace = true
 pin-project = "1.1.10"
 circular-buffer.workspace = true
 spin = "0.10.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+smol.workspace = true
+reqwest_client.workspace = true
+
+[dependencies.http_client]
+workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block = "0.1"
@@ -241,17 +257,79 @@ windows-core.workspace = true
 windows-numerics = "0.2"
 windows-registry = "0.5"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+http.workspace = true
+uuid = { version = "1.1.2", features = ["v4", "v5", "v7", "serde", "js"] }
+wgpu = { version = "24", optional = true, default-features = false, features = ["webgl", "webgpu", "wgsl"] }
+web-sys = { version = "0.3", optional = true, features = [
+    "Window",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "HtmlElement",
+    "HtmlInputElement",
+    "CssStyleDeclaration",
+    "Navigator",
+    "Clipboard",
+    "MediaQueryList",
+    "MediaQueryListEvent",
+    "Performance",
+    "Location",
+    "Gpu",
+    "GpuAdapter",
+    "GpuDevice",
+    "GpuQueue",
+    "GpuCanvasContext",
+    "GpuTextureFormat",
+    "Response",
+    "Headers",
+    "MouseEvent",
+    "KeyboardEvent",
+    "WheelEvent",
+    "FocusEvent",
+    "CompositionEvent",
+    "InputEvent",
+    "ResizeObserver",
+    "ResizeObserverEntry",
+    "ResizeObserverSize",
+    "DomRectReadOnly",
+    "EventTarget",
+    "AddEventListenerOptions",
+    "TouchEvent",
+    "Touch",
+    "TouchList",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "DomRect",
+    "console",
+] }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+cosmic-text = { version = "0.14.0", optional = true, default-features = false, features = ["std", "swash", "wasm-web"] }
+bytemuck = { version = "1", optional = true, features = ["derive"] }
+web-time = "1.1"
+
 [dev-dependencies]
 backtrace.workspace = true
-collections = { workspace = true, features = ["test-support"] }
 env_logger.workspace = true
-http_client = { workspace = true, features = ["test-support"] }
 lyon = { version = "1.0", features = ["extra"] }
 pretty_assertions.workspace = true
 rand.workspace = true
-reqwest_client = { workspace = true, features = ["test-support"] }
 unicode-segmentation.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+collections = { workspace = true, features = ["test-support"] }
+http_client = { workspace = true, features = ["test-support"] }
+reqwest_client = { workspace = true, features = ["test-support"] }
 util = { workspace = true, features = ["test-support"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 embed-resource = "3.0"

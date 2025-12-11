@@ -3,6 +3,7 @@ mod derive_app_context;
 mod derive_into_element;
 mod derive_render;
 mod derive_visual_context;
+mod main_macro;
 mod register_action;
 mod styles;
 mod test;
@@ -220,4 +221,27 @@ pub(crate) fn get_simple_attribute_field(ast: &DeriveInput, name: &'static str) 
         syn::Data::Enum(_) => None,
         syn::Data::Union(_) => None,
     }
+}
+
+/// `#[gpui::main]` marks the entry point for a GPUI application.
+///
+/// This attribute macro generates the appropriate entry point for both native and WebAssembly
+/// targets. On wasm32, it sets up the panic hook for better error messages in the browser console
+/// and creates a wasm_bindgen start function.
+///
+/// # Example
+///
+/// ```ignore
+/// use gpui::*;
+///
+/// #[gpui::main]
+/// fn main() {
+///     Application::new().run(|cx| {
+///         // Your app initialization here
+///     });
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn main(args: TokenStream, input: TokenStream) -> TokenStream {
+    main_macro::main_macro(args, input)
 }

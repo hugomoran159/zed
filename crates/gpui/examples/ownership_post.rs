@@ -10,6 +10,7 @@ struct Change {
 
 impl EventEmitter<Change> for Counter {}
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         let counter: Entity<Counter> = cx.new(|_cx| Counter { count: 0 });

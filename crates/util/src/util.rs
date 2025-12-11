@@ -1,6 +1,9 @@
 pub mod arc_cow;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod archive;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod command;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod fs;
 pub mod markdown;
 pub mod paths;
@@ -8,11 +11,14 @@ pub mod redact;
 pub mod rel_path;
 pub mod schemars;
 pub mod serde;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod shell;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod shell_builder;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod shell_env;
 pub mod size;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(all(any(test, feature = "test-support"), not(target_arch = "wasm32")))]
 pub mod test;
 pub mod time;
 
@@ -31,8 +37,11 @@ use std::{
     panic::Location,
     pin::Pin,
     task::{Context, Poll},
-    time::Instant,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use unicase::UniCase;
 
 pub use take_until::*;
@@ -302,6 +311,7 @@ fn load_shell_from_passwd() -> Result<()> {
 }
 
 /// Returns a shell escaped path for the current zed executable
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<String> {
     let zed_path =
         std::env::current_exe().context("Failed to determine current zed executable path.")?;
@@ -313,6 +323,7 @@ pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<S
 
 /// Returns a path for the zed cli executable, this function
 /// should be called from the zed executable, not zed-cli.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_zed_cli_path() -> Result<PathBuf> {
     let zed_path =
         std::env::current_exe().context("Failed to determine current zed executable path.")?;
@@ -351,7 +362,7 @@ pub fn get_zed_cli_path() -> Result<PathBuf> {
         })
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_arch = "wasm32")))]
 pub async fn load_login_shell_environment() -> Result<()> {
     load_shell_from_passwd().log_err();
 
@@ -380,6 +391,7 @@ pub async fn load_login_shell_environment() -> Result<()> {
 /// of the terminal.
 ///
 /// For more details: <https://registerspill.thorstenball.com/p/how-to-lose-control-of-your-shell>
+#[cfg(not(target_arch = "wasm32"))]
 pub fn set_pre_exec_to_start_new_session(
     command: &mut std::process::Command,
 ) -> &mut std::process::Command {
@@ -1002,6 +1014,7 @@ pub fn default<D: Default>() -> D {
     Default::default()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use self::shell::{
     get_default_system_shell, get_default_system_shell_preferring_bash, get_system_shell,
 };

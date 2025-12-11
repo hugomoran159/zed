@@ -7,8 +7,12 @@ use std::{
     path::{Path, PathBuf},
     rc::{Rc, Weak},
     sync::{Arc, atomic::Ordering::SeqCst},
-    time::{Duration, Instant},
+    time::Duration,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 use anyhow::{Context as _, Result, anyhow};
 use derive_more::{Deref, DerefMut};
@@ -25,7 +29,7 @@ pub use async_context::*;
 use collections::{FxHashMap, FxHashSet, HashMap, VecDeque};
 pub use context::*;
 pub use entity_map::*;
-use http_client::{HttpClient, Url};
+use http_client::{self, HttpClient, Url};
 use smallvec::SmallVec;
 #[cfg(any(test, feature = "test-support"))]
 pub use test_context::*;
@@ -124,6 +128,19 @@ impl Drop for AppRefMut<'_> {
 /// You won't interact with this type much outside of initial configuration and startup.
 pub struct Application(Rc<AppCell>);
 
+/// Returns the default HTTP client for the current platform.
+/// On native platforms, this uses reqwest. On WASM, this uses the browser's fetch API.
+pub fn default_http_client() -> Arc<dyn HttpClient> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Arc::new(reqwest_client::ReqwestClient::new())
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        http_client::WebHttpClient::new()
+    }
+}
+
 /// Represents an application before it is fully launched. Once your app is
 /// configured, you'll start the app with `App::run`.
 impl Application {
@@ -136,7 +153,7 @@ impl Application {
         Self(App::new_app(
             current_platform(false),
             Arc::new(()),
-            Arc::new(NullHttpClient),
+            default_http_client(),
         ))
     }
 
@@ -147,7 +164,7 @@ impl Application {
         Self(App::new_app(
             current_platform(true),
             Arc::new(()),
-            Arc::new(NullHttpClient),
+            default_http_client(),
         ))
     }
 
@@ -1009,8 +1026,11 @@ impl App {
                     // this didn't cause any issues on non windows platforms as it seems we always won the race to on_request_frame
                     // on windows we quite frequently lose the race and return a window that has never rendered, which leads to a crash
                     // where DispatchTree::root_node_id asserts on empty nodes
-                    let clear = window.draw(cx);
-                    clear.clear();
+                    // On web, skip this initial draw if the async WebGPU renderer isn't ready yet
+                    if window.platform_window.is_renderer_ready() {
+                        let clear = window.draw(cx);
+                        clear.clear();
+                    }
 
                     cx.window_handles.insert(id, window.handle);
                     cx.windows.get_mut(id).unwrap().replace(Box::new(window));
@@ -2407,6 +2427,7 @@ pub struct KeystrokeEvent {
 
 struct NullHttpClient;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpClient for NullHttpClient {
     fn send(
         &self,
@@ -2419,6 +2440,31 @@ impl HttpClient for NullHttpClient {
             anyhow::bail!("No HttpClient available");
         }
         .boxed()
+    }
+
+    fn user_agent(&self) -> Option<&http_client::http::HeaderValue> {
+        None
+    }
+
+    fn proxy(&self) -> Option<&Url> {
+        None
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl HttpClient for NullHttpClient {
+    fn send(
+        &self,
+        _req: http_client::Request<http_client::AsyncBody>,
+    ) -> http_client::HttpFuture<
+        'static,
+        anyhow::Result<http_client::Response<http_client::AsyncBody>>,
+    > {
+        use futures::FutureExt as _;
+        async move {
+            anyhow::bail!("No HttpClient available");
+        }
+        .boxed_local()
     }
 
     fn user_agent(&self) -> Option<&http_client::http::HeaderValue> {

@@ -444,6 +444,7 @@ impl Render for PaintingViewer {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx| {
         cx.open_window(

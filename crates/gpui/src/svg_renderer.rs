@@ -4,7 +4,6 @@ use crate::{
 };
 use image::Frame;
 use resvg::tiny_skia::Pixmap;
-use smallvec::SmallVec;
 use std::{
     hash::Hash,
     sync::{Arc, LazyLock},
@@ -86,7 +85,7 @@ impl SvgRenderer {
                 }
             }
 
-            let mut image = RenderImage::new(SmallVec::from_const([Frame::new(buffer)]));
+            let mut image = RenderImage::new(smallvec::smallvec![Frame::new(buffer)]);
             image.scale_factor = SMOOTH_SVG_SCALE_FACTOR;
             Arc::new(image)
         })

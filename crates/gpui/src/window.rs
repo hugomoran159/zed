@@ -47,8 +47,12 @@ use std::{
         Arc, Weak,
         atomic::{AtomicUsize, Ordering::SeqCst},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 use util::post_inc;
 use util::{ResultExt, measure};
 use uuid::Uuid;
@@ -1115,7 +1119,14 @@ impl Window {
                     || (active.get()
                         && last_input_timestamp.get().elapsed() < Duration::from_secs(1));
 
-                if invalidator.is_dirty() || request_frame_options.force_render {
+                // On web, skip drawing until the async WebGPU renderer is ready
+                let renderer_ready = handle
+                    .update(&mut cx, |_, window, _| {
+                        window.platform_window.is_renderer_ready()
+                    })
+                    .unwrap_or(true);
+
+                if renderer_ready && (invalidator.is_dirty() || request_frame_options.force_render) {
                     measure("frame duration", || {
                         handle
                             .update(&mut cx, |_, window, cx| {
@@ -1126,7 +1137,7 @@ impl Window {
                             })
                             .log_err();
                     })
-                } else if needs_present {
+                } else if needs_present && renderer_ready {
                     handle
                         .update(&mut cx, |_, window, _| window.present())
                         .log_err();
@@ -1996,6 +2007,13 @@ impl Window {
     /// the contents of the new [`Scene`], use [`Self::present`].
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+        // On web, the sprite atlas may change after async WebGPU initialization,
+        // so refresh it at the start of each frame
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.sprite_atlas = self.platform_window.sprite_atlas();
+        }
+
         self.invalidate_entities();
         cx.entities.clear_accessed();
         debug_assert!(self.rendered_entity_stack.is_empty());
@@ -3069,8 +3087,11 @@ impl Window {
                 .get_or_insert_with(&params.clone().into(), &mut || {
                     let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
                     Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
+                })?;
+            // On web, the atlas may not be ready yet during async WebGPU initialization
+            let Some(tile) = tile else {
+                return Ok(());
+            };
             let bounds = Bounds {
                 origin: glyph_origin.map(|px| px.floor()) + raster_bounds.origin.map(Into::into),
                 size: tile.bounds.size.map(Into::into),
@@ -3125,8 +3146,11 @@ impl Window {
                 .get_or_insert_with(&params.clone().into(), &mut || {
                     let (size, bytes) = self.text_system().rasterize_glyph(&params)?;
                     Ok(Some((size, Cow::Owned(bytes))))
-                })?
-                .expect("Callback above only errors or returns Some");
+                })?;
+            // On web, the atlas may not be ready yet during async WebGPU initialization
+            let Some(tile) = tile else {
+                return Ok(());
+            };
 
             let bounds = Bounds {
                 origin: glyph_origin.map(|px| px.floor()) + raster_bounds.origin.map(Into::into),

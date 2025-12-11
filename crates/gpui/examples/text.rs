@@ -297,6 +297,7 @@ impl Render for TextExample {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         cx.set_menus(vec![Menu {

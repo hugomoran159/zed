@@ -1,14 +1,19 @@
 use std::time::Duration;
 
+#[cfg(not(target_arch = "wasm32"))]
 use anyhow::Result;
 use gpui::{
-    Animation, AnimationExt as _, App, Application, AssetSource, Bounds, Context, SharedString,
+    Animation, AnimationExt as _, App, Application, Bounds, Context,
     Transformation, Window, WindowBounds, WindowOptions, bounce, div, ease_in_out, percentage,
     prelude::*, px, size, svg,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use gpui::{AssetSource, SharedString};
 
+#[cfg(not(target_arch = "wasm32"))]
 struct Assets {}
 
+#[cfg(not(target_arch = "wasm32"))]
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
         std::fs::read(path)
@@ -28,10 +33,13 @@ impl AssetSource for Assets {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 const ARROW_CIRCLE_SVG: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/examples/image/arrow_circle.svg"
 );
+#[cfg(target_arch = "wasm32")]
+const ARROW_CIRCLE_SVG: &str = "assets/image/arrow_circle.svg";
 
 struct AnimationExample {}
 
@@ -64,11 +72,14 @@ impl Render for AnimationExample {
                             .text_xl()
                             .gap_4()
                             .child("Hello Animation")
-                            .child(
-                                svg()
+                            .child({
+                                #[cfg(not(target_arch = "wasm32"))]
+                                let svg_element = svg().path(ARROW_CIRCLE_SVG);
+                                #[cfg(target_arch = "wasm32")]
+                                let svg_element = svg().external_path(ARROW_CIRCLE_SVG);
+                                svg_element
                                     .size_20()
                                     .overflow_hidden()
-                                    .path(ARROW_CIRCLE_SVG)
                                     .text_color(gpui::black())
                                     .with_animation(
                                         "image_circle",
@@ -80,8 +91,8 @@ impl Render for AnimationExample {
                                                 percentage(delta),
                                             ))
                                         },
-                                    ),
-                            ),
+                                    )
+                            }),
                     )
                     .child(
                         div()
@@ -100,10 +111,13 @@ impl Render for AnimationExample {
     }
 }
 
+#[gpui::main]
 fn main() {
-    Application::new()
-        .with_assets(Assets {})
-        .run(|cx: &mut App| {
+    #[cfg(not(target_arch = "wasm32"))]
+    let app = Application::new().with_assets(Assets {});
+    #[cfg(target_arch = "wasm32")]
+    let app = Application::new();
+    app.run(|cx: &mut App| {
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                     None,

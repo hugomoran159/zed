@@ -19,8 +19,6 @@ test-support = ["git2", "rand", "util_macros"]
 
 [dependencies]
 anyhow.workspace = true
-async-fs.workspace = true
-async_zip.workspace = true
 collections.workspace = true
 dirs.workspace = true
 dunce = "1.0"
@@ -38,13 +36,21 @@ serde.workspace = true
 serde_json.workspace = true
 serde_json_lenient.workspace = true
 shlex.workspace = true
-smol.workspace = true
 take-until.workspace = true
-tempfile.workspace = true
+
 unicase.workspace = true
 util_macros = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-fs.workspace = true
+async_zip.workspace = true
+smol.workspace = true
+tempfile.workspace = true
 walkdir.workspace = true
 which.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1.1"
 
 [target.'cfg(unix)'.dependencies]
 command-fds = "0.3.1"

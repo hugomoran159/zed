@@ -446,6 +446,7 @@ impl Render for DataTable {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         cx.open_window(

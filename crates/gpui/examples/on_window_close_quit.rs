@@ -34,6 +34,7 @@ impl Render for ExampleWindow {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         let mut bounds = Bounds::centered(None, size(px(500.), px(500.0)), cx);

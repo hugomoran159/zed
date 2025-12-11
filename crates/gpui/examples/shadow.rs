@@ -568,6 +568,7 @@ impl Render for Shadow {
     }
 }
 
+#[gpui::main]
 fn main() {
     Application::new().run(|cx: &mut App| {
         let bounds = Bounds::centered(None, size(px(1000.0), px(800.0)), cx);
